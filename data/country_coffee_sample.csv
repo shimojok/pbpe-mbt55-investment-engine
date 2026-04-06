@@ -1,0 +1,5 @@
+country,yield_base,cost_base,co2_base,waste_input
+Brazil,1.0,1200,800,1.2
+Vietnam,0.9,900,700,1.0
+Ethiopia,0.6,600,500,0.8
+Colombia,0.8,1000,650,1.1

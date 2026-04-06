@@ -1,0 +1,23 @@
+{
+  "Y0": 1.0,
+
+  "waste_input": 1.0,
+
+  "fertilizer_price": 250,
+  "process_cost_per_ton": 40,
+  "waste_disposal_cost": 180,
+
+  "incineration_emission": 600,
+  "process_emission": 40,
+  "carbon_sequestration": 500,
+
+  "beta": 2.5,
+
+  "nutrient_boost": 0.8,
+  "toxicity_reduction": 0.9,
+  "salinity_reset": 1.0,
+
+  "microbial_growth": 1.2,
+  "microbial_decay": 0.1,
+  "substrate_utilization": 1.0
+}
