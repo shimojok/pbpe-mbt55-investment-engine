@@ -1,3 +1,18 @@
+<p align="center">
+  <img src="./assets/header.png" width="800"/>
+</p>
+
+<h1 align="center">🌍 PMOS</h1>
+<h3 align="center">PBPE × MBT55 Investment Engine</h3>
+
+<p align="center">
+  Regenerative Agriculture × Carbon Markets × Token Economy
+</p>
+
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Azure](https://img.shields.io/badge/Azure-Integrated-blue)
+![License](https://img.shields.io/badge/license-Proprietary-red)
+
 # 🌍 Planetary Metabolic Operating System (PMOS)
 ## PBPE × MBT55 Investment Engine
 
