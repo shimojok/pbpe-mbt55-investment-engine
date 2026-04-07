@@ -173,6 +173,8 @@ st.success(
     f"and {round(yield_gain,1)} yield increase simultaneously."
 )
 
+st.header("📊 PMOS Results")
+
 credit = carbon_credit(10, 15, 0.1, 0.8)
 
 ranking = rank_countries({
@@ -180,5 +182,8 @@ ranking = rank_countries({
     "India": {"irr":0.25,"carbon":0.7,"stability":0.5,"scale":0.8,"policy":0.6}
 })
 
-st.write("Carbon Credit:", credit)
-st.write("Country Ranking:", ranking)
+st.metric("Carbon Credit", round(credit, 2))
+
+st.subheader("🌍 Country Ranking")
+for i, (country, score) in enumerate(ranking, 1):
+    st.write(f"{i}. {country} — Score: {round(score, 3)}")
