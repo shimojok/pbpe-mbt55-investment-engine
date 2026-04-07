@@ -1,9 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-from models.carbon import carbon_credit
-from models.country_rank import rank_countries
-
 from simulation import simulate, simulate_country
 from pbpe_token import pbpe_value
 from fund_model import irr_proxy
@@ -14,12 +11,12 @@ st.set_page_config(layout="wide")
 st.title("🌍 PBPE × MBT55 Investment Dashboard")
 
 # =========================
-# トグル
+# ON/OFF
 # =========================
-M = 1 if st.toggle("MBT55 ON", True) else 0
+M = 1 if st.toggle("MBT55 ON/OFF", True) else 0
 
 # =========================
-# シミュレーション
+# Simulation
 # =========================
 on = simulate(1)
 off = simulate(0)
@@ -30,76 +27,67 @@ cost_reduction = off["Cost"] - on["Cost"]
 co2_reduction = off["CO2"] - on["CO2"]
 
 # =========================
-# 経済計算
+# Economics
 # =========================
 pbpe = pbpe_value(yield_gain, co2_reduction, cost_reduction)
-
 carbon = carbon_value(co2_reduction)
-
-irr = irr_proxy(
-    cost_reduction,
-    carbon,
-    yield_gain * 50
-)
+irr = irr_proxy(cost_reduction, carbon, yield_gain * 50)
 
 # =========================
-# 🚀 投資判断（最上段）
+# Investment Decision
 # =========================
 st.markdown("## 🚀 Investment Decision")
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric("💰 Profit Impact", round(cost_reduction, 2))
-col2.metric("🌱 Carbon Impact", round(co2_reduction, 2))
-col3.metric("📈 Yield Growth", round(yield_gain, 2))
+col1.metric("💰 Profit Impact", round(cost_reduction if M else 0, 2))
+col2.metric("🌱 Carbon Impact", round(co2_reduction if M else 0, 2))
+col3.metric("📈 Yield Growth", round(yield_gain if M else 0, 2))
 
 # =========================
-# 💠 PBPE
+# PBPE
 # =========================
 st.markdown("## 💠 PBPE Value Engine")
-
-st.metric("PBPE Token", round(pbpe, 2))
+st.metric("PBPE Token", round(pbpe if M else 0, 2))
 
 # =========================
-# ♻️ グリーンプレミアム
+# Green Premium
 # =========================
 st.markdown("## ♻️ Negative Green Premium")
-
-st.metric("Cost Advantage", round(cost_reduction, 2))
+st.metric("Cost Advantage", round(cost_reduction if M else 0, 2))
 
 # =========================
-# 💰 カーボン価値
+# Carbon
 # =========================
 st.markdown("## 🌍 Carbon Value")
-
-st.metric("Carbon Revenue ($)", round(carbon, 2))
+st.metric("Carbon Revenue ($)", round(carbon if M else 0, 2))
 
 # =========================
-# 💼 投資指標
+# Investment Metrics
 # =========================
 st.markdown("## 💼 Investment Metrics")
 
 col4, col5 = st.columns(2)
 
-col4.metric("IRR Proxy", round(irr, 2))
+col4.metric("IRR Proxy", round(irr if M else 0, 2))
 
 investment = 200
-payback = investment / (cost_reduction + carbon/1000 + yield_gain * 50)
+payback = investment / max(1, (cost_reduction + carbon/1000 + yield_gain * 50))
 
-col5.metric("Payback (years)", round(payback, 2))
+col5.metric("Payback (years)", round(payback if M else 0, 2))
 
 # =========================
-# 🟢 投資判断
+# Signal
 # =========================
 st.markdown("## 🟢 Investment Signal")
 
-if cost_reduction > 0 and co2_reduction > 0:
+if M and cost_reduction > 0 and co2_reduction > 0:
     st.success("STRONG BUY")
 else:
-    st.warning("REVIEW REQUIRED")
+    st.warning("OFF or REVIEW")
 
 # =========================
-# 📊 KPI
+# Core Metrics
 # =========================
 st.markdown("## 📊 Core Metrics")
 
@@ -110,19 +98,21 @@ col7.metric("Cost", round(res["Cost"], 2))
 col8.metric("CO2", round(res["CO2"], 2))
 
 # =========================
-# 📈 ON vs OFF
+# ON vs OFF（修正済み）
 # =========================
 st.markdown("## 📈 ON vs OFF")
 
 df_compare = pd.DataFrame({
-    "ON": on,
-    "OFF": off
+    "State": ["OFF", "ON"],
+    "Yield": [off["Yield"], on["Yield"]],
+    "Cost": [off["Cost"], on["Cost"]],
+    "CO2": [off["CO2"], on["CO2"]]
 })
 
-st.bar_chart(df_compare)
+st.bar_chart(df_compare.set_index("State"))
 
 # =========================
-# 🌐 国別展開
+# Country Expansion
 # =========================
 st.markdown("## 🌐 Global Expansion")
 
@@ -132,11 +122,10 @@ results = [simulate_country(row, M) for _, row in df.iterrows()]
 res_df = pd.DataFrame(results)
 
 st.dataframe(res_df)
-
 st.bar_chart(res_df.set_index("country")[["Yield", "Cost", "CO2"]])
 
 # =========================
-# 🔍 信頼性
+# Reliability
 # =========================
 st.markdown("## 🔍 Reliability Score")
 
@@ -150,40 +139,23 @@ confidence = min(
 st.metric("Model Confidence (%)", round(confidence, 1))
 
 # =========================
-# 🌍 市場規模
+# Market
 # =========================
 st.markdown("## 🌍 Market Scale")
 
 global_market = 100_000_000_000
-
 impact_ratio = min(1.0, yield_gain / 3.0)
-
 tam = global_market * impact_ratio
 
 st.metric("Addressable Market ($)", f"{int(tam):,}")
 
 # =========================
-# 🧠 Insight
+# Insight
 # =========================
 st.markdown("## 🧠 Executive Insight")
 
 st.success(
     f"MBT55 enables {round(cost_reduction,0)} cost reduction, "
     f"{round(co2_reduction,0)} CO2 reduction, "
-    f"and {round(yield_gain,1)} yield increase simultaneously."
+    f"and {round(yield_gain,1)} yield increase."
 )
-
-st.header("📊 PMOS Results")
-
-credit = carbon_credit(10, 15, 0.1, 0.8)
-
-ranking = rank_countries({
-    "Brazil": {"irr":0.3,"carbon":0.8,"stability":0.6,"scale":0.9,"policy":0.7},
-    "India": {"irr":0.25,"carbon":0.7,"stability":0.5,"scale":0.8,"policy":0.6}
-})
-
-st.metric("Carbon Credit", round(credit, 2))
-
-st.subheader("🌍 Country Ranking")
-for i, (country, score) in enumerate(ranking, 1):
-    st.write(f"{i}. {country} — Score: {round(score, 3)}")
