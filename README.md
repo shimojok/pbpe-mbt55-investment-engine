@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/header.png" width="800"/>
+  <img src="./assets/header.jpg" width="800"/>
 </p>
 
 <h1 align="center">🌍 PMOS</h1>
