@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 
+from models.carbon import carbon_credit
+from models.country_rank import rank_countries
+
 from simulation import simulate, simulate_country
 from pbpe_token import pbpe_value
 from fund_model import irr_proxy
@@ -169,3 +172,13 @@ st.success(
     f"{round(co2_reduction,0)} CO2 reduction, "
     f"and {round(yield_gain,1)} yield increase simultaneously."
 )
+
+credit = carbon_credit(10, 15, 0.1, 0.8)
+
+ranking = rank_countries({
+    "Brazil": {"irr":0.3,"carbon":0.8,"stability":0.6,"scale":0.9,"policy":0.7},
+    "India": {"irr":0.25,"carbon":0.7,"stability":0.5,"scale":0.8,"policy":0.6}
+})
+
+st.write("Carbon Credit:", credit)
+st.write("Country Ranking:", ranking)
