@@ -1,161 +1,199 @@
 import streamlit as st
-import pandas as pd
+import numpy_financial as npf
 
-from simulation import simulate, simulate_country
-from pbpe_token import pbpe_value
-from fund_model import irr_proxy
-from carbon_credit import carbon_value
+from models.lcoa import calculate_lcoa
+from models.mrv import calculate_verified_credits, calculate_carbon_revenue
+from models.token_model import simulate_token_price
 
 st.set_page_config(layout="wide")
 
-st.title("🌍 PBPE × MBT55 Investment Dashboard")
+st.title("PBPE × MBT55 Investment Dashboard")
 
 # =========================
-# ON/OFF
+# ■ INPUT
 # =========================
-M = 1 if st.toggle("MBT55 ON/OFF", True) else 0
+mbt_on = st.sidebar.checkbox("MBT55 ON", value=True)
+
+capex = st.sidebar.number_input("CAPEX", value=1000.0)
+opex_base = st.sidebar.number_input("OPEX/year", value=100.0)
+discount_rate = st.sidebar.slider("Discount Rate", 0.0, 0.3, 0.1)
+
+baseline_emission = st.sidebar.number_input("Baseline CO2", value=1000.0)
+project_emission = st.sidebar.number_input("Project CO2", value=600.0)
+carbon_price = st.sidebar.number_input("Carbon Price", value=30.0)
+
+token_price = st.sidebar.number_input("Initial Token Price", value=10.0)
 
 # =========================
-# Simulation
+# ■ DYNAMIC MODEL（簡易）
 # =========================
-on = simulate(1)
-off = simulate(0)
-res = simulate(M)
+T = 10
+soil = [1.0]
+yield_series = []
+opex = []
 
-yield_gain = on["Yield"] - off["Yield"]
-cost_reduction = off["Cost"] - on["Cost"]
-co2_reduction = off["CO2"] - on["CO2"]
+for t in range(T):
+    if mbt_on:
+        delta_soc = 0.05
+        yield_boost = 0.5
+        cost_reduction = 0.02
+        emission_reduction = 1.0
+    else:
+        delta_soc = 0.01
+        yield_boost = 0.2
+        cost_reduction = 0.0
+        emission_reduction = 0.0
 
-# =========================
-# Economics
-# =========================
-pbpe = pbpe_value(yield_gain, co2_reduction, cost_reduction)
-carbon = carbon_value(co2_reduction)
-irr = irr_proxy(cost_reduction, carbon, yield_gain * 50)
+    soil.append(soil[-1] + delta_soc)
 
-# =========================
-# Investment Decision
-# =========================
-st.markdown("## 🚀 Investment Decision")
+    y = 3 + yield_boost * soil[-1]
+    yield_series.append(y)
 
-col1, col2, col3 = st.columns(3)
-
-col1.metric("💰 Profit Impact", round(cost_reduction if M else 0, 2))
-col2.metric("🌱 Carbon Impact", round(co2_reduction if M else 0, 2))
-col3.metric("📈 Yield Growth", round(yield_gain if M else 0, 2))
+    opex.append(opex_base * (1 - cost_reduction * t))
 
 # =========================
-# PBPE
+# ■ CALCULATIONS
 # =========================
-st.markdown("## 💠 PBPE Value Engine")
-st.metric("PBPE Token", round(pbpe if M else 0, 2))
+def run_model(mbt_on_flag):
+    soil = [1.0]
+    yield_series = []
+    opex = []
 
-# =========================
-# Green Premium
-# =========================
-st.markdown("## ♻️ Negative Green Premium")
-st.metric("Cost Advantage", round(cost_reduction if M else 0, 2))
+    for t in range(T):
+        if mbt_on_flag:
+            delta_soc = 0.05
+            yield_boost = 0.5
+            cost_reduction = 0.02
+            emission_factor = 0.7
+        else:
+            delta_soc = 0.01
+            yield_boost = 0.2
+            cost_reduction = 0.0
+            emission_factor = 1.0
 
-# =========================
-# Carbon
-# =========================
-st.markdown("## 🌍 Carbon Value")
-st.metric("Carbon Revenue ($)", round(carbon if M else 0, 2))
+        soil.append(soil[-1] + delta_soc)
 
-# =========================
-# Investment Metrics
-# =========================
-st.markdown("## 💼 Investment Metrics")
+        y = 3 + yield_boost * soil[-1]
+        yield_series.append(y)
 
-col4, col5 = st.columns(2)
+        opex.append(opex_base * (1 - cost_reduction * t))
 
-col4.metric("IRR Proxy", round(irr if M else 0, 2))
+    lcoa_val = calculate_lcoa(capex, opex, yield_series, discount_rate)
 
-investment = 200
-payback = investment / max(1, (cost_reduction + carbon/1000 + yield_gain * 50))
+    price_per_unit = 200
+    cash_flows = [-capex] + [y * price_per_unit - o for y, o in zip(yield_series, opex)]
 
-col5.metric("Payback (years)", round(payback if M else 0, 2))
+    import numpy_financial as npf
+    irr_val = npf.irr(cash_flows)
 
-# =========================
-# Signal
-# =========================
-st.markdown("## 🟢 Investment Signal")
+    adjusted_project = project_emission * emission_factor
 
-if M and cost_reduction > 0 and co2_reduction > 0:
-    st.success("STRONG BUY")
+    verified_val = calculate_verified_credits(baseline_emission, adjusted_project)
+    revenue_val = calculate_carbon_revenue(verified_val, carbon_price)
+
+    return lcoa_val, irr_val, verified_val, revenue_val
+
+lcoa_on, irr_on, co2_on, rev_on = run_model(True)
+lcoa_off, irr_off, co2_off, rev_off = run_model(False)
+
+def improvement(new, old, reverse=False):
+    if old == 0 or old is None:
+        return 0
+
+    change = (new - old) / abs(old) * 100
+
+    # コスト系は符号を反転（下がるほど良い）
+    if reverse:
+        change = -change
+
+    return change
+
+# LCOA
+lcoa = calculate_lcoa(capex, opex, yield_series, discount_rate)
+
+# IRR（簡易）
+price_per_unit = 200  # ← ここを追加（作物価格）
+
+cash_flows = [-capex] + [
+    y * price_per_unit - o
+    for y, o in zip(yield_series, opex)
+]
+
+irr = npf.irr(cash_flows)
+
+# MRV
+if mbt_on:
+    adjusted_project_emission = project_emission * 0.7
 else:
-    st.warning("OFF or REVIEW")
+    adjusted_project_emission = project_emission
 
-# =========================
-# Core Metrics
-# =========================
-st.markdown("## 📊 Core Metrics")
+verified = calculate_verified_credits(
+    baseline_emission,
+    adjusted_project_emission
+)
+carbon_revenue = calculate_carbon_revenue(verified, carbon_price)
 
-col6, col7, col8 = st.columns(3)
+# Token（実体連動）
+demand = carbon_revenue / 1000
+supply = capex / 100
 
-col6.metric("Yield", round(res["Yield"], 2))
-col7.metric("Cost", round(res["Cost"], 2))
-col8.metric("CO2", round(res["CO2"], 2))
-
-# =========================
-# ON vs OFF（修正済み）
-# =========================
-st.markdown("## 📈 ON vs OFF")
-
-df_compare = pd.DataFrame({
-    "State": ["OFF", "ON"],
-    "Yield": [off["Yield"], on["Yield"]],
-    "Cost": [off["Cost"], on["Cost"]],
-    "CO2": [off["CO2"], on["CO2"]]
-})
-
-st.bar_chart(df_compare.set_index("State"))
-
-# =========================
-# Country Expansion
-# =========================
-st.markdown("## 🌐 Global Expansion")
-
-df = pd.read_csv("data/country_coffee_sample.csv")
-
-results = [simulate_country(row, M) for _, row in df.iterrows()]
-res_df = pd.DataFrame(results)
-
-st.dataframe(res_df)
-st.bar_chart(res_df.set_index("country")[["Yield", "Cost", "CO2"]])
-
-# =========================
-# Reliability
-# =========================
-st.markdown("## 🔍 Reliability Score")
-
-confidence = min(
-    100,
-    (yield_gain / 3.0) * 30 +
-    (co2_reduction / 1000) * 40 +
-    (cost_reduction / 500) * 30
+prices = simulate_token_price(
+    P0=token_price,
+    demand=demand,
+    supply=supply
 )
 
-st.metric("Model Confidence (%)", round(confidence, 1))
+# =========================
+# ■ KPI表示（ここがスカスカ解消）
+# =========================
+
+st.subheader(f"MBT55 Status: {'ON' if mbt_on else 'OFF'}")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("LCOA", round(lcoa_on, 2),
+            f"{improvement(lcoa_on, lcoa_off, reverse=True):.1f}%")
+
+col2.metric("IRR", round(irr_on, 3),
+            f"{improvement(irr_on, irr_off):.1f}%")
+
+col3.metric("CO2 Reduction", round(co2_on, 2),
+            f"{improvement(co2_on, co2_off):.1f}%")
+
+col4.metric("Carbon Revenue", round(rev_on, 2),
+            f"{improvement(rev_on, rev_off):.1f}%")
 
 # =========================
-# Market
+# ■ GRAPHS
 # =========================
-st.markdown("## 🌍 Market Scale")
 
-global_market = 100_000_000_000
-impact_ratio = min(1.0, yield_gain / 3.0)
-tam = global_market * impact_ratio
+st.subheader("Token Price Simulation")
+st.line_chart(prices)
 
-st.metric("Addressable Market ($)", f"{int(tam):,}")
+col8, col9 = st.columns(2)
+
+with col8:
+    st.subheader("Yield Evolution")
+    st.line_chart(yield_series)
+
+with col9:
+    st.subheader("Soil (SOC) Evolution")
+    st.line_chart(soil)
 
 # =========================
-# Insight
+# ■ CASHFLOW表示
 # =========================
-st.markdown("## 🧠 Executive Insight")
+st.subheader("Cash Flow")
+st.bar_chart(cash_flows)
 
-st.success(
-    f"MBT55 enables {round(cost_reduction,0)} cost reduction, "
-    f"{round(co2_reduction,0)} CO2 reduction, "
-    f"and {round(yield_gain,1)} yield increase."
-)
+# =========================
+# ■ LOG（監査）
+# =========================
+if st.checkbox("Show MRV Log"):
+    st.json({
+        "baseline": baseline_emission,
+        "project": project_emission,
+        "verified": verified,
+        "carbon_price": carbon_price,
+        "revenue": carbon_revenue
+    })
